@@ -5,23 +5,29 @@
 
 using namespace std;
 
+//class Time_car {
+//	int trip_drive_car;
+//public:
+//	int get_trip_drive_car()const {
+//		return trip_drive_car;
+//	}
+//	~Time_car() {};
+//	int Trip_Driving_Car() {
+//		int Seconda=0;
+//		int Minuta = 0;
+//		int Hours = 0;
+//		Seconda++;
+//		if (Seconda > 60) { Minuta++; Seconda = 0; }
+//		if (Minuta > 60) { Hours++; Minuta = 0; Seconda = 0; }
+//		if (Hours > 24) { Hours=0; Minuta = 0; Seconda = 0; }
+//		trip_drive_car = Seconda + (Minuta * 60) + ((Hours * 60) * 60);
+//		return trip_drive_car;
+//	}
+//};
+
 #define MIN_TANK_VOLUME	40
 #define MAX_TANK_VOLUME	80
 #define DEFAULT_TANK_VOLUME 60
-class time_car {
-	int trip_drive_car;
-public:
-	int get_trip_drive_car()const {
-		return trip_drive_car;
-	}
-	int Trip_Driving_Car() {
-		int Seconda=0;
-		int Minuta = 0;
-		int Hours = 0;
-
-		return trip_drive_car;
-	}
-};
 
 class Tank
 {
@@ -137,15 +143,21 @@ class Car
 {
 	Engine engine;
 	Tank tank;
+	//Time_car time_car;
 	bool driver_inside;
 	int speed;
 	const int MAX_SPEED;
 	int accelleration;
+	int trip_drive_M=0;
+	int trip_drive_H=0;
+	int trip_drive;
+
 	struct Control
 	{
 		std::thread panel_thread;
 		std::thread engine_idle_thread;		//холостой ход двигателя
 		std::thread free_wheeling_thread;	//движение по инерции
+		std::thread trip_drive_car_thread; // время движения
 	}control;
 public:
 	Car(int consumption, int volume, int max_speed) :
@@ -169,7 +181,12 @@ public:
 	void get_in()
 	{
 		driver_inside = true;
-		//panel();
+		
+		/*cout << "-------------------------";
+		cout << time_car.Trip_Driving_Car() << endl;
+		cout << "-------------------------";
+		std::this_thread::sleep_for(3s);*/
+		
 		control.panel_thread = std::thread(&Car::panel, this);
 	}
 	void get_out()
@@ -184,6 +201,7 @@ public:
 		if (driver_inside && tank.get_fuel_level())
 		{
 			engine.start();
+			
 			control.engine_idle_thread = std::thread(&Car::engine_idle, this);
 		}
 	}
@@ -204,13 +222,14 @@ public:
 			switch (key)
 			{
 			case Enter:driver_inside ? get_out() : get_in(); break;
-			case 'F':case 'f':
+			case 'F':case 'f':			
 				double fuel;
 				cout << "Введите объем топлива: "; cin >> fuel;
 				fill(fuel);
 				break;
 			case 'I':case 'i'://Ignition - зажигание
 				engine.started() ? stop_engine() : start_engine();
+				control.trip_drive_car_thread = std::thread(&Car::trip_driving, this);// Время при работающем двигатели					
 				break;
 			case 'W':case 'w':
 				if (driver_inside && engine.started())
@@ -242,6 +261,25 @@ public:
 				control.free_wheeling_thread.join();
 			engine.speed_consumption_dependency(speed);
 		} while (key != Escape);
+	}
+
+	void trip_driving() // --------------------------------------------
+	{
+		int Seconda = 0;
+		int Minuta = 0;
+		int Hours = 0;
+		trip_drive = 1;
+		while (trip_drive > 0) 
+		{
+			Seconda++;
+			if (Seconda < 60) trip_drive = Seconda;
+			if (Seconda > 60) { Minuta++; Seconda = 0; trip_drive_M = Minuta; }
+			if (Minuta > 60) { Hours++; Minuta = 0; Seconda = 0; trip_drive_H = Hours;  }
+			if (Hours > 24) { Hours = 0; Minuta = 0; Seconda = 0; trip_drive = 1; }
+			
+			
+			std::this_thread::sleep_for(100ms);
+		}
 	}
 	void free_wheeling()
 	{
@@ -277,6 +315,8 @@ public:
 				SetConsoleTextAttribute(hConsole, 0x07);
 			}
 			cout << endl;
+			
+			cout << "Trip Driving Car: " << trip_drive_H<<" Hours : " << trip_drive_M << " Minut : " << trip_drive << endl;
 			cout << "Engine is " << (engine.started() ? "started" : "stopped") << endl;
 			cout << "Consumption per second: " << engine.get_consumption_per_second() << " liters.\n";
 			std::this_thread::sleep_for(200ms);
